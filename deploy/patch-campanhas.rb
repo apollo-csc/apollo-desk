@@ -134,7 +134,7 @@ MODULO = <<~'RUBY'
 
       conv_ids = msgs.map { |m| m[1] }.uniq
       conv = ::Conversation.where(id: conv_ids).pluck(:id, :contact_id, :display_id).each_with_object({}) { |(id, cid, did), h| h[id] = [cid, did] }
-      respostas = ::Message.where(conversation_id: conv_ids, message_type: :incoming).group(:conversation_id).minimum(:created_at)
+      respostas = ::Message.where(conversation_id: conv_ids, message_type: :incoming).reorder(nil).group(:conversation_id).minimum(:created_at)
       contatos = ::Contact.where(id: conv.values.map(&:first)).pluck(:id, :name, :phone_number).each_with_object({}) { |(id, n, p), h| h[id] = [n, p] }
       vistos = {}
       linhas = []
