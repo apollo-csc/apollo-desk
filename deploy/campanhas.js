@@ -120,6 +120,12 @@
     });
     return b;
   }
+  function horaDoCard(iso) {
+    try {
+      var d = new Date(iso);
+      return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d).toLowerCase();
+    } catch (e) { return ''; }
+  }
   function enfeitaLista() {
     if (!/\/campaigns\/whatsapp\/?$/.test(location.pathname)) return;
     var grupos = document.querySelectorAll('div.flex.items-center.justify-end.w-20.gap-2');
@@ -139,7 +145,14 @@
         if (card) Array.prototype.forEach.call(card.querySelectorAll('*'), function (el) {
           if (el.children.length === 0) titulos[(el.textContent || '').trim().toLowerCase()] = true;
         });
-        var alvo = elegiveis.filter(function (c) { return !usados[c.id] && titulos[String(c.title).trim().toLowerCase()]; })[0];
+        var candidatos = elegiveis.filter(function (c) { return !usados[c.id] && titulos[String(c.title).trim().toLowerCase()]; });
+        // Duas campanhas com o MESMO nome (06/nov: lote 2 criado com o título do lote 1): desempata pelo horário
+        // agendado que o card mostra ("Nov 6, 5:15 PM" = Intl en-US). Sem casamento pelo horário, fica a ordem.
+        var alvo = candidatos[0];
+        if (candidatos.length > 1) {
+          var porHora = candidatos.filter(function (c) { return c.scheduled_at && titulos[horaDoCard(c.scheduled_at)]; });
+          if (porHora.length) alvo = porHora[0];
+        }
         if (!alvo) return;
         usados[alvo.id] = true;
         var modelo = g.querySelector('button');
