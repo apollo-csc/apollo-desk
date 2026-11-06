@@ -102,6 +102,8 @@
     b.dataset.apolloRelatorio = String(campanha.id);
     b.title = 'Relatório da campanha';
     b.setAttribute('aria-label', 'Relatório da campanha');
+    // O modelo é o botão de apagar (vermelho): troca para a cor da marca, que é a do sistema.
+    b.className = b.className.replace(/n-ruby-d+/g, 'n-brand');
     var icone = b.querySelector('[class*="i-lucide-"]');
     if (icone) icone.className = icone.className.replace(/i-lucide-[\w-]+/, 'i-lucide-chart-no-axes-column');
     b.addEventListener('click', function (ev) {
@@ -123,7 +125,8 @@
         if (g.querySelector('[data-apollo-relatorio]')) return;
         var card = g.parentElement; for (var i = 0; i < 4 && card && card.innerText.trim().length < 3; i++) card = card.parentElement;
         var texto = card ? card.innerText : '';
-        var alvo = elegiveis.filter(function (c) { return !usados[c.id] && texto.indexOf(c.title) >= 0; })[0];
+        var textoMin = texto.toLowerCase(); // o card capitaliza o título por CSS: comparar sem caixa
+        var alvo = elegiveis.filter(function (c) { return !usados[c.id] && textoMin.indexOf(String(c.title).toLowerCase()) >= 0; })[0];
         if (!alvo) return;
         usados[alvo.id] = true;
         var modelo = g.querySelector('button');
