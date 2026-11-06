@@ -103,7 +103,7 @@
     b.title = 'Relatório da campanha';
     b.setAttribute('aria-label', 'Relatório da campanha');
     // O modelo é o botão de apagar (vermelho): troca para a cor da marca, que é a do sistema.
-    b.className = b.className.replace(/n-ruby-d+/g, 'n-brand');
+    b.className = b.className.replace(/n-ruby-\d+/g, 'n-brand');
     var icone = b.querySelector('[class*="i-lucide-"]');
     if (icone) icone.className = icone.className.replace(/i-lucide-[\w-]+/, 'i-lucide-chart-no-axes-column');
     b.addEventListener('click', function (ev) {
