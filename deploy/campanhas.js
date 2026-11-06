@@ -76,12 +76,20 @@
     if (r) r.push(rota); else location.assign(rota);
   }
 
-  // ---- 1) traduções (vue-i18n expõe a instância em app.__VUE_I18N__) ----
+  // ---- 1) traduções ----
+  // ⚠️ app.__VUE_I18N__ só existe em desenvolvimento; em produção a instância vem de
+  // app._context.provides[app.__VUE_I18N_SYMBOL__] (foi por isso que o relatório ficava em inglês).
+  function i18nDoApp() {
+    var a = app();
+    if (!a) return null;
+    if (a.__VUE_I18N__) return a.__VUE_I18N__;
+    var sym = a.__VUE_I18N_SYMBOL__;
+    return (sym && a._context && a._context.provides && a._context.provides[sym]) || null;
+  }
   var traduzido = false;
   function traduz() {
     if (traduzido) return;
-    var a = app();
-    var i18n = a && a.__VUE_I18N__;
+    var i18n = i18nDoApp();
     if (!i18n || !i18n.global || !i18n.global.mergeLocaleMessage) return;
     ['pt_BR', 'pt'].forEach(function (loc) { try { i18n.global.mergeLocaleMessage(loc, TRADUCAO); } catch (e) { /* idioma não carregado */ } });
     traduzido = true;

@@ -143,6 +143,7 @@ RUN ruby /tmp/patch-variaveis-modelo.rb && rm /tmp/patch-variaveis-modelo.rb
 # por campanha (tela que o front já traz) ganha backend nosso, em MIT, sem tocar
 # em enterprise/. JS: botão do relatório nos cards, pt-BR, "Responderam", CSV.
 COPY deploy/campanhas.js /app/public/apollodesk/campanhas.js
+COPY deploy/traducoes-pt.js /app/public/apollodesk/traducoes-pt.js
 COPY deploy/patch-campanhas.rb /tmp/patch-campanhas.rb
 RUN ruby /tmp/patch-campanhas.rb && rm /tmp/patch-campanhas.rb
 

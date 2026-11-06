@@ -279,5 +279,12 @@ abort('patch-campanhas: </head> não encontrado no layout') unless html.include?
 unless html.include?('campanhas.js')
   File.write(layout, html.sub('</head>', "    <script src=\"/apollodesk/campanhas.js\" defer></script>\n  </head>"))
 end
+# traducoes-pt.js: tudo que o painel ainda mostrava em inglês (06/nov/2026); entra ANTES do campanhas.js.
+html = File.read(layout)
+unless html.include?('traducoes-pt.js')
+  File.write(layout, html.sub('<script src="/apollodesk/campanhas.js"', "<script src=\"/apollodesk/traducoes-pt.js\" defer></script>\n    <script src=\"/apollodesk/campanhas.js\""))
+end
 abort('patch-campanhas: JS não está em public/apollodesk/') unless File.exist?("#{APP}/public/apollodesk/campanhas.js")
+abort('patch-campanhas: traducoes-pt.js não está em public/apollodesk/') unless File.exist?("#{APP}/public/apollodesk/traducoes-pt.js")
+abort('patch-campanhas: traducoes-pt.js não entrou no layout') unless File.read(layout).include?('traducoes-pt.js')
 puts 'patch-campanhas: módulo + controller + serviço + rotas + layout ok'
