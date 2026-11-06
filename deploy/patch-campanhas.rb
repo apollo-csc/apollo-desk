@@ -134,8 +134,18 @@ MODULO = <<~'RUBY'
 
       conv_ids = msgs.map { |m| m[1] }.uniq
       conv = ::Conversation.where(id: conv_ids).pluck(:id, :contact_id, :display_id).each_with_object({}) { |(id, cid, did), h| h[id] = [cid, did] }
-      respostas = ::Message.where(conversation_id: conv_ids, message_type: :incoming).reorder(nil).group(:conversation_id).minimum(:created_at)
       contatos = ::Contact.where(id: conv.values.map(&:first)).pluck(:id, :name, :phone_number).each_with_object({}) { |(id, n, p), h| h[id] = [n, p] }
+      # "Respondeu" = primeira mensagem do CONTATO na caixa depois do disparo, em QUALQUER conversa:
+      # a conversa da campanha nasce resolvida e, sem lock_to_single_conversation, a resposta abre
+      # uma conversa nova (e o agente atende) — contar só a mesma conversa dava sempre zero (06/nov).
+      inicio = msgs.map(&:last).compact.min
+      respostas = if inicio
+                    ::Message.joins(:conversation).where(inbox_id: campaign.inbox_id, message_type: :incoming)
+                             .where(conversations: { contact_id: contatos.keys }).where('messages.created_at > ?', inicio)
+                             .reorder(nil).group('conversations.contact_id').minimum('messages.created_at')
+                  else
+                    {}
+                  end
       vistos = {}
       linhas = []
       msgs.each do |_id, conv_id, status, source_id, atributos, content, criado|
@@ -152,11 +162,14 @@ MODULO = <<~'RUBY'
              else status
              end
         codigo, titulo = erro.to_s.split(': ', 2)
+        respondeu = respostas[cid].present? && respostas[cid] > criado
+        # Quem respondeu recebeu: se o webhook de entrega se perdeu (ex.: deploy no meio), não fica em "enviada".
+        st = 'delivered' if st == 'sent' && respondeu
         linhas << {
           contact: { id: cid, name: nome, phone_number: fone }, status: st, message_content: content,
           error_code: (codigo.presence if erro.present?), error_title: (titulo.presence || erro if erro.present?),
           error_message: (MOTIVOS[codigo.to_s] if erro.present?),
-          responded: respostas[conv_id].present? && respostas[conv_id] > criado,
+          responded: respondeu,
           conversation_display_id: did, sent_at: criado, accepted: source_id.present?
         }
       end
