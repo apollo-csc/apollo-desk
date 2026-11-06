@@ -160,17 +160,22 @@ MODULO = <<~'RUBY'
           conversation_display_id: did, sent_at: criado, accepted: source_id.present?
         }
       end
-      # Audiência sem mensagem: sem telefone = pulado; com telefone = ainda na fila (ou não processado).
+      # Audiência sem mensagem: sem telefone = pulado; com telefone = ainda na fila.
+      # A audiência é relida pela etiqueta AGORA: em campanha concluída, quem entrou na etiqueta depois
+      # do disparo apareceria como "não processado" (aconteceu em 06/nov). Por isso, concluída só lista
+      # quem tem motivo determinístico (sem telefone ou nao-enviar); o resto fica fora.
       bloqueados = campaign.account.contacts.tagged_with(ETIQUETA_BLOQUEIO).pluck(:id).to_set
       audiencia(campaign).where.not(id: vistos.keys).pluck(:id, :name, :phone_number).each do |cid, nome, fone|
         sem_fone = fone.blank?
         bloqueado = bloqueados.include?(cid)
+        next if campaign.completed? && !sem_fone && !bloqueado
+
         linhas << {
           contact: { id: cid, name: nome, phone_number: fone }, status: (sem_fone || bloqueado) ? 'skipped' : 'queued',
           message_content: nil, error_code: nil, error_title: nil,
           error_message: if bloqueado then "Contato com a etiqueta #{ETIQUETA_BLOQUEIO}"
                          elsif sem_fone then 'Contato sem telefone'
-                         else (campaign.completed? ? 'Não processado pela campanha' : nil) end,
+                         end,
           responded: false, conversation_display_id: nil, sent_at: nil, accepted: false
         }
       end

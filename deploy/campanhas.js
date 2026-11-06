@@ -132,9 +132,14 @@
       grupos.forEach(function (g) {
         if (g.querySelector('[data-apollo-relatorio]')) return;
         var card = g.parentElement; for (var i = 0; i < 4 && card && card.innerText.trim().length < 3; i++) card = card.parentElement;
-        var texto = card ? card.innerText : '';
-        var textoMin = texto.toLowerCase(); // o card capitaliza o título por CSS: comparar sem caixa
-        var alvo = elegiveis.filter(function (c) { return !usados[c.id] && textoMin.indexOf(String(c.title).toLowerCase()) >= 0; })[0];
+        // O título é o texto INTEIRO de algum elemento do card (o card capitaliza por CSS: comparar
+        // sem caixa). Igualdade, não "contém": 'teste' casava com o card de 'teste2' e abria o
+        // relatório errado (06/nov).
+        var titulos = {};
+        if (card) Array.prototype.forEach.call(card.querySelectorAll('*'), function (el) {
+          if (el.children.length === 0) titulos[(el.textContent || '').trim().toLowerCase()] = true;
+        });
+        var alvo = elegiveis.filter(function (c) { return !usados[c.id] && titulos[String(c.title).trim().toLowerCase()]; })[0];
         if (!alvo) return;
         usados[alvo.id] = true;
         var modelo = g.querySelector('button');
