@@ -147,6 +147,17 @@ COPY deploy/traducoes-pt.js /app/public/apollodesk/traducoes-pt.js
 COPY deploy/patch-campanhas.rb /tmp/patch-campanhas.rb
 RUN ruby /tmp/patch-campanhas.rb && rm /tmp/patch-campanhas.rb
 
+# ── Conversas restritas ao responsável (E17) ─────────────────────────────────
+# Nas caixas marcadas na conta (custom_attributes conversas_restritas.caixas), o
+# agente comum só alcança as conversas atribuídas a ele: lista, abertura, busca,
+# eventos em tempo real e notificação de conversa nova. Administradores e robôs
+# não mudam. Pedido do Leonardo (11/nov/2026): vendedor não vê conversa que não é
+# dele no WhatsApp. Sem a chave na conta nada muda. Derruba o build se as âncoras
+# mudarem. Prova: deploy/testa-conversas-restritas.rb (fica na imagem).
+COPY deploy/patch-conversas-restritas.rb /tmp/patch-conversas-restritas.rb
+RUN ruby /tmp/patch-conversas-restritas.rb && rm /tmp/patch-conversas-restritas.rb
+COPY deploy/testa-conversas-restritas.rb /app/deploy/testa-conversas-restritas.rb
+
 # ── Casca dos e-mails internos ───────────────────────────────────────────────
 # Substitui o layout do Chatwoot pela casca da marca (mesma do ApolloAuth e do
 # ApolloPlan: fundo #0f1512, card #1a221d, verde #2fe68c, logo do Desk).
