@@ -1,6 +1,7 @@
 # ApolloDesk — prova da patch "conversas restritas" (deploy/patch-conversas-restritas.rb).
 #
 #   CONTA=4 CAIXA=20 bundle exec rails runner deploy/testa-conversas-restritas.rb
+#   CONTA=4 CAIXA=20 AGENTE=33 bundle exec rails runner deploy/testa-conversas-restritas.rb   # com um agente escolhido
 #
 # Roda dentro da imagem (a nova, antes de trocar o serviço; ou a que está no ar) contra o banco de verdade. Liga a regra da conta DENTRO
 # de uma transação que é desfeita no fim: nada fica gravado, e a regra de produção não muda por causa deste roteiro. Só mostra ids e
@@ -17,7 +18,8 @@ account = Account.find(conta); inbox = account.inboxes.find(caixa)
 Current.account = account
 admin_ids = account.account_users.where(role: :administrator).pluck(:user_id)
 # o agente comum, membro da caixa, com MAIS conversas atribuídas nela (e que não é dono de todas)
-agente = inbox.members.where.not(id: admin_ids).max_by { |u| account.conversations.where(inbox_id: caixa, assignee_id: u.id).count }
+# AGENTE=<id> escolhe o agente (útil para provar com quem também atende outra caixa)
+agente = ENV['AGENTE'] ? inbox.members.where.not(id: admin_ids).find(Integer(ENV['AGENTE'])) : inbox.members.where.not(id: admin_ids).max_by { |u| account.conversations.where(inbox_id: caixa, assignee_id: u.id).count }
 admin = User.find(admin_ids.first)
 abort('sem agente comum na caixa') unless agente
 total = account.conversations.where(inbox_id: caixa).count
