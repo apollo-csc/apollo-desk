@@ -6,7 +6,8 @@
 # verdade. NÃO ESCREVE NADA: a rota só lê, e o roteiro confere ao fim que a
 # contagem de usuários, de tokens e de Platform Apps não mudou. O segredo usado é
 # gerado aqui, vive só neste processo e não vai para o log — e o token lido NUNCA
-# é impresso, só comparado. Sai com código 1 se alguma conferência falhar.
+# é impresso — as conferências de token comparam BOOLEANO, justamente para o relatório de falha
+# não vazar credencial. Sai com código 1 se alguma conferência falhar.
 #
 # ⚠️ O log do Rails no meio da saída IMPRIME O E-MAIL de quem foi consultado (é a
 # linha de auditoria da própria rota). Para ler só o resultado, sem dado de
@@ -25,9 +26,13 @@ SEGREDO_OUTRA = SecureRandom.hex(32)
 antes = { usuarios: User.count, tokens: AccessToken.count, platform_apps: PlatformApp.count }
 
 account = Account.find(conta)
-# um agente comum da conta (não super administrador), com token
-agente = account.users.where(type: nil).find { |u| u.access_token.present? }
-abort('sem agente comum com token na conta') if agente.nil?
+# um agente comum da conta: não super administrador E não administrador da conta, com token.
+# ⚠️ O "não administrador" é de propósito: se um dia uma conferência falhar, o estrago de um
+# valor vazado é menor. (Aconteceu em 12/nov: na 1ª rodada, com FORCE_SSL devolvendo 301, as
+# conferências de token imprimiam o esperado em claro — por isso agora elas comparam booleano.)
+admins = account.account_users.where(role: :administrator).pluck(:user_id)
+agente = account.users.where(type: nil).where.not(id: admins).find { |u| u.access_token.present? }
+abort('sem agente comum (não administrador) com token na conta') if agente.nil?
 superadmin = User.where.not(type: nil).first
 de_fora = if outra
             Account.find(outra).users.where(type: nil).find { |u| !u.account_users.exists?(account_id: conta) }
@@ -68,13 +73,13 @@ confere.call('segredo curto: 401', pede.call(agente.email, 'curto').first, 401)
 puts 'com o segredo da conta:'
 status, corpo = pede.call(agente.email, SEGREDO)
 confere.call('agente da conta: 200', status, 200)
-confere.call('devolve o token certo', corpo['access_token'], agente.access_token.token)
+confere.call('devolve o token certo', corpo['access_token'] == agente.access_token.token, true)
 confere.call('devolve a conta do segredo', corpo['account_id'], conta)
 confere.call('a resposta tem SÓ access_token e account_id', corpo.keys.sort, %w[access_token account_id])
 confere.call('não devolve link de SSO nem nada de usuário',
              corpo.to_s.include?('sso_auth_token') || corpo.key?('user') || corpo.key?('pubsub_token'), false)
 confere.call('e-mail com espaço e maiúscula resolve igual',
-             pede.call(" #{agente.email.upcase} ", SEGREDO).last['access_token'], agente.access_token.token)
+             pede.call(" #{agente.email.upcase} ", SEGREDO).last['access_token'] == agente.access_token.token, true)
 
 puts 'confinamento e recusas (tudo 404, sem dizer o motivo):'
 confere.call('e-mail que não existe: 404', pede.call("nao-existe-#{SecureRandom.hex(6)}@invalido.local", SEGREDO).first, 404)
@@ -97,7 +102,7 @@ confere.call('nenhum Platform App existe', PlatformApp.count, 0)
 puts 'nada foi criado nem alterado:'
 depois = { usuarios: User.count, tokens: AccessToken.count, platform_apps: PlatformApp.count }
 confere.call('contagens iguais às do início', depois, antes)
-confere.call('o token do agente é o mesmo de antes', agente.reload.access_token.token, corpo['access_token'])
+confere.call('o token do agente é o mesmo de antes', agente.reload.access_token.token == corpo['access_token'], true)
 
 ENV.delete("#{ApolloRotaToken::PREFIXO}#{conta}")
 ENV.delete("#{ApolloRotaToken::PREFIXO}#{outra}") if outra
