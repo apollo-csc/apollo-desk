@@ -7,6 +7,10 @@
 # contagem de usuários, de tokens e de Platform Apps não mudou. O segredo usado é
 # gerado aqui, vive só neste processo e não vai para o log — e o token lido NUNCA
 # é impresso, só comparado. Sai com código 1 se alguma conferência falhar.
+#
+# ⚠️ O log do Rails no meio da saída IMPRIME O E-MAIL de quem foi consultado (é a
+# linha de auditoria da própria rota). Para ler só o resultado, sem dado de
+# pessoa na tela:  ... | grep -vE '^[IWDEF], '
 conta = Integer(ENV.fetch('CONTA'))
 outra = ENV['OUTRA'] ? Integer(ENV['OUTRA']) : nil
 falhas = []
@@ -38,6 +42,10 @@ ENV["#{ApolloRotaToken::PREFIXO}#{outra}"] = SEGREDO_OUTRA if outra
 ApolloRotaToken.recarrega!
 
 sessao = ActionDispatch::Integration::Session.new(Rails.application)
+# ⚠️ FORCE_SSL está ligado: sem isto TODA requisição volta 301 e a prova vira um
+# campo de falhas que nada tem a ver com a rota (foi o que aconteceu na 1ª rodada).
+sessao.https!
+sessao.host!('app.apollodesk.com.br')
 pede = lambda do |email, segredo|
   cabecalhos = segredo ? { 'Api-Access-Token' => segredo } : {}
   sessao.get('/apollo/api/v1/users/token', params: { email: email }, headers: cabecalhos)
