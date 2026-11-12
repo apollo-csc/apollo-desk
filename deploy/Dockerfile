@@ -158,6 +158,28 @@ COPY deploy/patch-conversas-restritas.rb /tmp/patch-conversas-restritas.rb
 RUN ruby /tmp/patch-conversas-restritas.rb && rm /tmp/patch-conversas-restritas.rb
 COPY deploy/testa-conversas-restritas.rb /app/deploy/testa-conversas-restritas.rb
 
+# ── Rota estreita do conector: lê o token de API da pessoa (Decisão #21) ───
+# O conector único (MCP) age no Desk COMO A PESSOA e precisa do token dela. No
+# Desk esse token já existe (1 por usuário, sem expiração): não há o que cunhar,
+# há o que LER. A rota devolve Só o token, com UM SEGREDO POR CONTA
+# (APOLLO_TOKEN_CONTA_<id> no .env, vindo do 1Password pelo apollo-op-env), recusa
+# super administrador e registra cada leitura.
+#
+# Por que não o Platform App do Chatwoot, que faria isso de fábrica: a mesma
+# credencial dele gera LINK DE SSO e cria/apaga usuário, e o porteiro não contém
+# quem a tem (o `create` não verifica o permissible e é ele que inscreve). Como
+# esta instância atende todas as empresas, seria tomada de conta ENTRE CLIENTES.
+# Medido em 12/nov/2026: platform_apps = 0 — nunca criar um.
+#
+# São dois arquivos NOVOS, nenhuma âncora no upstream: o initializer acrescenta a
+# rota com `routes.append` e o controlador mora em namespace nosso. Por isso COPY
+# direto, sem script — não há o que quebrar na próxima versão do Chatwoot.
+# ⚠️ A rota nasce PÚBLICA: o /apollo/api/* leva 404 no Caddy (ver
+# deploy/caddy-vhost.snippet). Prova: deploy/testa-rota-token.rb (fica na imagem).
+COPY deploy/apollo-rota-token.rb /app/config/initializers/apollo_rota_token.rb
+COPY deploy/apollo-tokens-controller.rb /app/app/controllers/apollo/api/v1/tokens_controller.rb
+COPY deploy/testa-rota-token.rb /app/deploy/testa-rota-token.rb
+
 # ── Casca dos e-mails internos ───────────────────────────────────────────────
 # Substitui o layout do Chatwoot pela casca da marca (mesma do ApolloAuth e do
 # ApolloPlan: fundo #0f1512, card #1a221d, verde #2fe68c, logo do Desk).
