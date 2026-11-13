@@ -158,6 +158,20 @@ COPY deploy/patch-conversas-restritas.rb /tmp/patch-conversas-restritas.rb
 RUN ruby /tmp/patch-conversas-restritas.rb && rm /tmp/patch-conversas-restritas.rb
 COPY deploy/testa-conversas-restritas.rb /app/deploy/testa-conversas-restritas.rb
 
+# ── Painel do Inspetor de atendimento, em Relatórios (E4 da APOLLO-335) ──────
+# O mesmo conteúdo dos PDFs do fechamento do Inspetor, com dois períodos de livre
+# escolha para comparar. Só administradores da conta, e só nas contas com o painel
+# ligado (custom_attributes inspetor.painel = slug do cliente no Inspetor): quem
+# recusa é o controller, antes de buscar qualquer dado. Os dados não moram no Desk:
+# o controller busca o painel pronto no n8n, com a senha das variáveis
+# APOLLO_INSPETOR_* (1Password, item apollo-infra/n8n-inspetor-painel). Sem a
+# chave na conta nada muda. Derruba o build se as âncoras mudarem.
+# Prova: deploy/testa-inspetor.rb (fica na imagem).
+COPY deploy/inspetor.js /app/public/apollodesk/inspetor.js
+COPY deploy/patch-inspetor.rb /tmp/patch-inspetor.rb
+RUN ruby /tmp/patch-inspetor.rb && rm /tmp/patch-inspetor.rb
+COPY deploy/testa-inspetor.rb /app/deploy/testa-inspetor.rb
+
 # ── Casca dos e-mails internos ───────────────────────────────────────────────
 # Substitui o layout do Chatwoot pela casca da marca (mesma do ApolloAuth e do
 # ApolloPlan: fundo #0f1512, card #1a221d, verde #2fe68c, logo do Desk).
