@@ -24,6 +24,61 @@
  * formulário reaparece. Se o seletor do form mudar numa versão nova, o bloco
  * simplesmente não aparece — o login continua funcionando.
  */
+/*
+ * GUARDA DO BANCO LOCAL DO DESK (14/nov/2026) — fica NESTE arquivo de propósito.
+ * ---------------------------------------------------------------------------------
+ * Sintoma que ela evita: a pessoa entra e a tela vem sem os canais, as etiquetas e os times no
+ * menu, e a caixa de resposta sem o clipe e sem o microfone. O servidor responde tudo certo.
+ *
+ * Causa (Chatwoot 4.17, CacheEnabledApiClient): caixas, etiquetas e times passam por um
+ * IndexedDB `cw-store-<conta>` ANTES de qualquer chamada ao servidor. Ao sair da conta, o
+ * Chatwoot manda apagar esse banco. Se houver outra janela do Desk aberta no mesmo navegador
+ * (aba + aplicativo instalado), o apagamento fica bloqueado pela conexão dela e toda abertura
+ * nova entra na fila atrás dele: `initDb()` nunca resolve, as três listas ficam vazias e nenhum
+ * erro aparece. Sem a lista de caixas a tela não sabe o tipo do canal e esconde anexo e áudio.
+ *
+ * O que a guarda faz, só para bancos `cw-store-*`:
+ *   1. toda conexão aberta se FECHA quando outra janela pede para apagar/atualizar o banco
+ *      (`versionchange`), então o apagamento não fica bloqueado;
+ *   2. se a abertura não responder em 2 s (janela antiga ainda sem a guarda, ou outro motivo),
+ *      a guarda avisa erro ao pedido: o Chatwoot já trata erro de abertura caindo para a rede.
+ *
+ * Por que aqui: este é o único script nosso que o layout carrega SEM `defer` e que o Caddy serve
+ * sem cache — roda antes de o aplicativo abrir o banco e chega a todos na próxima carga.
+ */
+(function () {
+  'use strict';
+  if (!window.indexedDB || window.__apolloGuardaIdb) return;
+  window.__apolloGuardaIdb = true;
+  var ESPERA_MS = 2000;
+  var abrir = window.indexedDB.open;
+  window.indexedDB.open = function (nome) {
+    var pedido = abrir.apply(window.indexedDB, arguments);
+    if (String(nome || '').indexOf('cw-store-') !== 0) return pedido;
+    var respondeu = false, desistiu = false;
+    var relogio = setTimeout(function () {
+      if (respondeu) return;
+      desistiu = true;
+      // Quem escuta o erro lê `pedido.error`, e num pedido ainda pendente essa leitura LANÇA exceção
+      // (o aviso morreria dentro do ouvinte e a tela seguiria travada): a guarda responde no lugar.
+      try {
+        Object.defineProperty(pedido, 'error', { configurable: true, get: function () { return new DOMException('abertura do banco local sem resposta', 'TimeoutError'); } });
+        pedido.dispatchEvent(new Event('error'));
+      } catch (e) { /* segue esperando */ }
+    }, ESPERA_MS);
+    pedido.addEventListener('success', function () {
+      respondeu = true; clearTimeout(relogio);
+      if (desistiu) { try { delete pedido.error; } catch (e) { /* sem efeito */ } }
+      var banco = pedido.result; if (!banco) return;
+      // A tela já seguiu pela rede: não segurar uma conexão que ninguém usa (ela bloquearia o próximo apagamento).
+      if (desistiu) { try { banco.close(); } catch (e) { /* já fechada */ } return; }
+      banco.addEventListener('versionchange', function () { try { banco.close(); } catch (e) { /* já fechada */ } });
+    });
+    pedido.addEventListener('error', function () { respondeu = true; clearTimeout(relogio); });
+    return pedido;
+  };
+})();
+
 (function () {
   'use strict';
 
