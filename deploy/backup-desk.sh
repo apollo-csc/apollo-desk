@@ -29,7 +29,7 @@ set -euo pipefail
 PROJ="${PROJ:-apollo-desk}"
 ENV_FILE="${ENV_FILE:-/root/plan-secrets/apollo-desk.env}"
 KEEP="${KEEP:-7}"
-BACKUP_DIR="${BACKUP_DIR:-/root/backups-desk}"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/HC_Volume_106386852/backups-desk}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-apollo-backup:apollo-backups/desk}"
 # Espaço mínimo livre para começar. Em ago/2026 os backups do Nextcloud
 # encheram a raiz e derrubaram serviço; desde então todo backup da casa checa
