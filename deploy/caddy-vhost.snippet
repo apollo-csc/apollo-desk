@@ -56,6 +56,15 @@ app.apollodesk.com.br {
 	# valendo o do Rails. `>` substitui o cabeçalho na resposta do proxy.
 	header @marca >Cache-Control "no-cache"
 
+	# ⚠️ A rota estreita do conector (/apollo/api/*, Decisão #21) monta no Rails e
+	# por isso NASCE PÚBLICA neste hostname. Ela é fechada aqui, antes do proxy:
+	# só a rede interna do Docker alcança o Rails nesse caminho, e quem vier de
+	# fora recebe 404 — nem 401, para não anunciar que o caminho existe.
+	# A proteção da rota é barreira de rede MAIS segredo por conta, nunca o
+	# segredo sozinho.
+	@conector path /apollo/api/*
+	respond @conector 404
+
 	reverse_proxy apollo-desk-rails:3000 {
 		header_up Host {host}
 		header_up X-Real-IP {remote_host}
