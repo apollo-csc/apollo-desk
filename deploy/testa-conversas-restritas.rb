@@ -39,10 +39,14 @@ busca = lambda do |user, tipo|
   SearchService.new(current_user: user, current_account: account, search_type: tipo, params: ActionController::Parameters.new(q: 'a')).perform.values.first
 end
 
-puts 'SEM a regra (como é hoje):'
-confere.call('agente vê todas as conversas da caixa', visiveis.call(agente).where(inbox_id: caixa).count, total)
-confere.call('agente abre conversa de outro vendedor', politica.call(agente, alheia), true) if alheia
-confere.call('eventos em tempo real vão para todos os membros da caixa', ApolloConversasRestritas.membros(minha).pluck(:id).sort, inbox.members.pluck(:id).sort)
+if ENV['REGRA_JA_LIGADA']
+  puts 'SEM a regra: pulado (REGRA_JA_LIGADA — a conta já tem a regra em produção)'
+else
+  puts 'SEM a regra (como é hoje):'
+  confere.call('agente vê todas as conversas da caixa', visiveis.call(agente).where(inbox_id: caixa).count, total)
+  confere.call('agente abre conversa de outro vendedor', politica.call(agente, alheia), true) if alheia
+  confere.call('eventos em tempo real vão para todos os membros da caixa', ApolloConversasRestritas.membros(minha).pluck(:id).sort, inbox.members.pluck(:id).sort)
+end
 
 ActiveRecord::Base.transaction do
   account.update!(custom_attributes: account.custom_attributes.to_h.merge('conversas_restritas' => { 'caixas' => [caixa] }))
@@ -70,6 +74,26 @@ ActiveRecord::Base.transaction do
   confere.call('tempo real: conversa sem responsável não vai para nenhum agente', ApolloConversasRestritas.membros(orfa).pluck(:id), []) if orfa
   if em_outra
     confere.call('tempo real: em caixa não restrita vai para todos os membros', ApolloConversasRestritas.membros(em_outra).pluck(:id).sort, em_outra.inbox.members.pluck(:id).sort)
+  end
+  # Visão ampla (APOLLO-438): outro agente comum da caixa entra na lista e volta a ver tudo;
+  # o agente da prova continua restrito. VISAO=<id> escolhe quem entra.
+  amplo = ENV['VISAO'] ? inbox.members.where.not(id: admin_ids).find(Integer(ENV['VISAO'])) : inbox.members.where.not(id: admin_ids + [agente.id]).first
+  abort('VISAO precisa ser outra pessoa, não o agente da prova') if amplo && amplo.id == agente.id
+  if amplo
+    regra ={ 'caixas' => [caixa], 'visao_ampla' => [amplo.id] }
+    account.update!(custom_attributes: account.custom_attributes.to_h.merge('conversas_restritas' => regra))
+    account.reload
+    puts "VISÃO AMPLA para o agente ##{amplo.id} (lista #{ApolloConversasRestritas.visao_ampla(account).inspect}):"
+    confere.call('visão ampla: continua agente, não administrador', account.account_users.find_by(user_id: amplo.id).role, 'agent')
+    confere.call('visão ampla: lista mostra todas as conversas da caixa', visiveis.call(amplo).where(inbox_id: caixa).count, total)
+    confere.call('visão ampla: abre conversa de outro vendedor', politica.call(amplo, alheia), true) if alheia
+    confere.call('visão ampla: abre conversa sem responsável', politica.call(amplo, orfa), true) if orfa
+    confere.call('visão ampla: busca de conversas acha as de outros', busca.call(amplo, 'Conversation').where(inbox_id: caixa).where.not(assignee_id: amplo.id).exists?, true)
+    confere.call('visão ampla: recebe em tempo real conversa de outro', ApolloConversasRestritas.membros(minha).pluck(:id).sort, [agente.id, amplo.id].sort)
+    confere.call('visão ampla: o agente fora da lista continua restrito', visiveis.call(agente).where(inbox_id: caixa).count, dele)
+    confere.call('visão ampla: o agente fora da lista continua sem abrir a alheia', politica.call(agente, alheia), false) if alheia
+    nao_membro = account.inboxes.where.not(id: amplo.inboxes.select(:id)).pluck(:id)
+    confere.call('visão ampla: não ganha caixa de que não é membro', visiveis.call(amplo).where(inbox_id: nao_membro).count, 0)
   end
   if alheia
     alheia.update_columns(assignee_id: agente.id)   # troca de responsável, só nesta transação

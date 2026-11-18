@@ -30,6 +30,20 @@
 # Conversa sem responsável numa caixa restrita só aparece para administradores.
 # Conversa aberta pelo próprio agente nasce atribuída a ele (a tela já manda assignee_id).
 #
+# CLASSE "VISÃO AMPLA" (APOLLO-438, 18/nov/2026)
+# ----------------------------------------------
+# "Classe intermediária no Desk, sem acesso de administrador, mas com visualização ampla
+# das conversas" — começa no time corporativo da Dagostino (vendedoras 1 a 4).
+# É uma lista de ids de usuário dentro da mesma regra:
+#   account.custom_attributes['conversas_restritas'] =
+#     { 'caixas' => [20], 'visao_ampla' => [35, 23, 33, 66] }
+# Quem está na lista continua AGENTE (não mexe em configurações, caixas, times nem
+# pessoas), mas nas caixas restritas vê, abre, busca e recebe em tempo real TODAS as
+# conversas, como era antes da regra. Só vale nas caixas de que a pessoa é membro: a
+# visão ampla não dá acesso a caixa nova (isso continua sendo feito na caixa).
+# Por que não os papéis personalizados do Chatwoot: moram em enterprise/, que a build
+# desliga (ver README, licença).
+#
 # O QUE ISTO NÃO COBRE (dito por extenso)
 # ---------------------------------------
 # - notificações ANTIGAS já gravadas continuam na lista de notificações de cada um;
@@ -60,9 +74,22 @@ MODULO = <<~'RUBY'
       []
     end
 
-    # A regra vale para este usuário? Só para pessoa (User) que não é administradora da conta.
+    # ids dos usuários da classe "visão ampla": agentes que veem todas as conversas das
+    # caixas restritas de que são membros (APOLLO-438)
+    def self.visao_ampla(account)
+      regra = account&.custom_attributes.to_h[CHAVE]
+      return [] unless regra.is_a?(Hash)
+
+      Array(regra['visao_ampla']).map(&:to_i).reject(&:zero?)
+    rescue StandardError
+      []
+    end
+
+    # A regra vale para este usuário? Só para pessoa (User) que não é administradora da conta
+    # nem está na visão ampla.
     def self.restrito?(account, user)
       return false unless account && user.is_a?(User)
+      return false if visao_ampla(account).include?(user.id)
 
       !AccountUser.where(account_id: account.id, user_id: user.id, role: :administrator).exists?
     end
@@ -104,6 +131,7 @@ MODULO = <<~'RUBY'
       # na troca de responsável, o anterior também recebe o evento (a tela dele precisa saber)
       anterior = conversation.respond_to?(:previous_changes) ? conversation.previous_changes['assignee_id'] : nil
       ids << anterior.first if anterior.is_a?(Array)
+      ids.concat(visao_ampla(conversation.account))   # só os que são membros da caixa (o where abaixo)
       membros.where(id: ids.compact)
     end
   end
