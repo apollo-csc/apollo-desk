@@ -94,6 +94,19 @@ ActiveRecord::Base.transaction do
     confere.call('visão ampla: o agente fora da lista continua sem abrir a alheia', politica.call(agente, alheia), false) if alheia
     nao_membro = account.inboxes.where.not(id: amplo.inboxes.select(:id)).pluck(:id)
     confere.call('visão ampla: não ganha caixa de que não é membro', visiveis.call(amplo).where(inbox_id: nao_membro).count, 0)
+
+    # Pelo TIME (o caminho da tela): time temporário, só nesta transação
+    time = account.teams.create!(name: "prova-visao-ampla-#{SecureRandom.hex(3)}")
+    regra = { 'caixas' => [caixa], 'visao_ampla_times' => [time.id] }
+    account.update!(custom_attributes: account.custom_attributes.to_h.merge('conversas_restritas' => regra))
+    account.reload
+    confere.call('por time: fora do time, continua restrito', visiveis.call(amplo).where(inbox_id: caixa).where.not(assignee_id: amplo.id).count, 0)
+    time.add_members([amplo.id])
+    confere.call('por time: ao entrar no time, vê todas as conversas da caixa', visiveis.call(amplo).where(inbox_id: caixa).count, total)
+    confere.call('por time: abre conversa de outro vendedor', politica.call(amplo, alheia), true) if alheia
+    confere.call('por time: o agente fora do time continua restrito', visiveis.call(agente).where(inbox_id: caixa).count, dele)
+    time.remove_members([amplo.id])
+    confere.call('por time: ao sair do time, volta a ser restrito', visiveis.call(amplo).where(inbox_id: caixa).where.not(assignee_id: amplo.id).count, 0)
   end
   if alheia
     alheia.update_columns(assignee_id: agente.id)   # troca de responsável, só nesta transação

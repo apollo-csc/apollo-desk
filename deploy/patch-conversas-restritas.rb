@@ -34,9 +34,11 @@
 # ----------------------------------------------
 # "Classe intermediária no Desk, sem acesso de administrador, mas com visualização ampla
 # das conversas" — começa no time corporativo da Dagostino (vendedoras 1 a 4).
-# É uma lista de ids de usuário dentro da mesma regra:
+# Vale para quem está num TIME marcado na regra (o jeito normal: o administrador da conta
+# põe e tira gente em Configurações → Times, sem servidor) ou numa lista de ids de usuário:
 #   account.custom_attributes['conversas_restritas'] =
-#     { 'caixas' => [20], 'visao_ampla' => [35, 23, 33, 66] }
+#     { 'caixas' => [20], 'visao_ampla_times' => [30] }      # 30 = time "corporativo"
+#   (opcional) 'visao_ampla' => [ids de usuário]             # exceção pontual, fora de time
 # Quem está na lista continua AGENTE (não mexe em configurações, caixas, times nem
 # pessoas), mas nas caixas restritas vê, abre, busca e recebe em tempo real TODAS as
 # conversas, como era antes da regra. Só vale nas caixas de que a pessoa é membro: a
@@ -75,12 +77,17 @@ MODULO = <<~'RUBY'
     end
 
     # ids dos usuários da classe "visão ampla": agentes que veem todas as conversas das
-    # caixas restritas de que são membros (APOLLO-438)
+    # caixas restritas de que são membros (APOLLO-438). Vem de duas listas da regra:
+    # 'visao_ampla_times' (ids de time da conta: vale para quem estiver no time, e quem
+    # administra a conta gerencia pela tela de Times) e 'visao_ampla' (ids de usuário).
     def self.visao_ampla(account)
       regra = account&.custom_attributes.to_h[CHAVE]
       return [] unless regra.is_a?(Hash)
 
-      Array(regra['visao_ampla']).map(&:to_i).reject(&:zero?)
+      ids = Array(regra['visao_ampla']).map(&:to_i).reject(&:zero?)
+      times = Array(regra['visao_ampla_times']).map(&:to_i).reject(&:zero?)
+      ids |= TeamMember.joins(:team).where(teams: { account_id: account.id, id: times }).pluck(:user_id) if times.any?
+      ids
     rescue StandardError
       []
     end
